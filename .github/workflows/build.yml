@@ -17,9 +17,14 @@ jobs:
       - name: Add books
         run: |
           mkdir -p arabic_library/assets/books
-          if [ -d books ]; then cp -r books/. arabic_library/assets/books/; fi
           for d in nahw sarf balagha arud adab fiqh_lugha; do
             mkdir -p arabic_library/assets/books/$d
+          done
+          for z in *.zip; do
+            b=$(basename "$z" .zip)
+            [ "$b" = "arabic_library" ] && continue
+            sec=${b%-*}
+            unzip -oq "$z" -d arabic_library/assets/books/$sec
           done
 
       - uses: actions/setup-java@v4
@@ -36,9 +41,11 @@ jobs:
         working-directory: arabic_library
         run: flutter create --platforms=android --org com.arabiclibrary --project-name arabic_library .
 
-      - name: Arabic app name
+      - name: App name and icon
         working-directory: arabic_library
-        run: sed -i 's/android:label="[^"]*"/android:label="المكتبة العربية"/' android/app/src/main/AndroidManifest.xml
+        run: |
+          sed -i 's/android:label="[^"]*"/android:label="مكتبة اللغة العربية"/' android/app/src/main/AndroidManifest.xml
+          cp -r android_res/. android/app/src/main/res/
 
       - name: Build
         working-directory: arabic_library
