@@ -16,30 +16,50 @@ jobs:
 
       - name: Add books
         run: |
+          shopt -s nullglob
           mkdir -p arabic_library/assets/books
+          if [ -d books ]; then cp -r books/. arabic_library/assets/books/; fi
           for d in nahw sarf balagha arud adab fiqh_lugha; do
             mkdir -p arabic_library/assets/books/$d
+            # normal zips: nahw-1.zip, adab-2.zip ...
+            for z in $d-*.zip; do
+              unzip -oq "$z" -d arabic_library/assets/books/$d
+            done
+            # split zips: adab-big1.zip.001 + adab-big1.zip.002 ...
+            for p in $d-big*.zip.001; do
+              cat "${p%.001}".* > /tmp/big.zip
+              unzip -oq /tmp/big.zip -d arabic_library/assets/books/$d
+              rm /tmp/big.zip
+            done
           done
-          for z in *.zip; do
-            b=$(basename "$z" .zip)
-            [ "$b" = "arabic_library" ] && continue
-            sec=${b%-*}
-            unzip -oq "$z" -d arabic_library/assets/books/$sec
+          echo "Books per section:"
+          for d in nahw sarf balagha arud adab fiqh_lugha; do
+            echo "$d: $(find arabic_library/assets/books/$d -type f | wc -l)"
           done
+
+      - name: Register book folders in pubspec
+        working-directory: arabic_library
+        run: |
           python3 - <<'PY'
-          import os, json
-          root = 'arabic_library/assets/books'
-          titles = {}
-          for sec in sorted(os.listdir(root)):
-              d = os.path.join(root, sec)
-              if not os.path.isdir(d):
-                  continue
-              files = sorted(f for f in os.listdir(d) if f.lower().endswith('.pdf'))
-              for i, f in enumerate(files, 1):
-                  new = f'b{i:03d}.pdf'
-                  os.rename(os.path.join(d, f), os.path.join(d, new))
-                  titles[f'assets/books/{sec}/{new}'] = f[:-4].replace('_', ' ').strip()
-          json.dump(titles, open(os.path.join(root, 'titles.json'), 'w'), ensure_ascii=False)
+          import re, os
+          p = "pubspec.yaml"
+          s = open(p, encoding="utf-8").read()
+          dirs = []
+          for root, _, files in os.walk("assets/books"):
+              if files:
+                  dirs.append(root.replace("\\", "/") + "/")
+          dirs.sort()
+          missing = [d for d in dirs if re.search(r"^\s*-\s*" + re.escape(d) + r"\s*$", s, re.M) is None]
+          if missing:
+              entries = "".join(f"    - {d}\n" for d in missing)
+              if re.search(r"^  assets:\s*$", s, re.M):
+                  s = re.sub(r"^(  assets:\s*\n)", lambda m: m.group(1) + entries, s, count=1, flags=re.M)
+              elif re.search(r"^flutter:\s*$", s, re.M):
+                  s = re.sub(r"^(flutter:\s*\n)", lambda m: m.group(1) + "  assets:\n" + entries, s, count=1, flags=re.M)
+              else:
+                  s += "\nflutter:\n  assets:\n" + entries
+              open(p, "w", encoding="utf-8").write(s)
+          print("registered:", missing)
           PY
 
       - uses: actions/setup-java@v4
@@ -56,11 +76,11 @@ jobs:
         working-directory: arabic_library
         run: flutter create --platforms=android --org com.arabiclibrary --project-name arabic_library .
 
-      - name: App name and icon
+      - name: Arabic app name and icon
         working-directory: arabic_library
         run: |
-          sed -i 's/android:label="[^"]*"/android:label="مكتبة اللغة العربية"/' android/app/src/main/AndroidManifest.xml
-          cp -r android_res/. android/app/src/main/res/
+          sed -i 's/android:label="[^"]*"/android:label="المكتبة العربية"/' android/app/src/main/AndroidManifest.xml
+          if [ -d android_res ]; then cp -r android_res/. android/app/src/main/res/; fi
 
       - name: Build
         working-directory: arabic_library
