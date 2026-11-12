@@ -37,6 +37,27 @@ jobs:
             echo "$d: $(find arabic_library/assets/books/$d -type f | wc -l)"
           done
 
+      - name: Shorten book file names
+        run: |
+          python3 - <<'PY'
+          import os, json, hashlib, unicodedata, re
+          root = "arabic_library/assets/books"
+          titles = {}
+          for dirpath, _, files in os.walk(root):
+              for f in files:
+                  if not f.lower().endswith(".pdf"):
+                      continue
+                  base = unicodedata.normalize("NFC", f[:-4])
+                  new = "b_" + hashlib.sha1(base.encode("utf-8")).hexdigest()[:10] + ".pdf"
+                  dst = os.path.join(dirpath, new)
+                  os.rename(os.path.join(dirpath, f), dst)
+                  title = re.sub(r"\s+", " ", base.replace("_", " ")).strip()
+                  titles[dst.replace("\\", "/")[len("arabic_library/"):]] = title
+          with open(os.path.join(root, "titles.json"), "w", encoding="utf-8") as fh:
+              json.dump(titles, fh, ensure_ascii=False, indent=1)
+          print(len(titles), "books renamed")
+          PY
+
       - name: Register book folders in pubspec
         working-directory: arabic_library
         run: |
