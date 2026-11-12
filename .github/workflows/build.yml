@@ -26,6 +26,21 @@ jobs:
             sec=${b%-*}
             unzip -oq "$z" -d arabic_library/assets/books/$sec
           done
+          python3 - <<'PY'
+          import os, json
+          root = 'arabic_library/assets/books'
+          titles = {}
+          for sec in sorted(os.listdir(root)):
+              d = os.path.join(root, sec)
+              if not os.path.isdir(d):
+                  continue
+              files = sorted(f for f in os.listdir(d) if f.lower().endswith('.pdf'))
+              for i, f in enumerate(files, 1):
+                  new = f'b{i:03d}.pdf'
+                  os.rename(os.path.join(d, f), os.path.join(d, new))
+                  titles[f'assets/books/{sec}/{new}'] = f[:-4].replace('_', ' ').strip()
+          json.dump(titles, open(os.path.join(root, 'titles.json'), 'w'), ensure_ascii=False)
+          PY
 
       - uses: actions/setup-java@v4
         with:
